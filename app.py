@@ -29,12 +29,11 @@ config_temp = cargar_datos('config.json', {
     "favicon_base64": "",
     "macroprocesos": [],
     "perfiles": [],
-    "personal": []
+    "colaboradores": []
 })
 
 # --- CONFIGURACIÓN DE PÁGINA (DEBE SER LO PRIMERO) ---
-# Intentar cargar favicon desde la configuración
-favicon_img = "📊" # Icono por defecto
+favicon_img = "📊"
 if config_temp["favicon_base64"]:
     try:
         favicon_bytes = base64.b64decode(config_temp["favicon_base64"])
@@ -49,7 +48,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- INICIALIZACIÓN DE ESTADOS EN SESSION_STATE ---
+# --- INICIALIZACIÓN DE ESTADOS ---
 if "config" not in st.session_state:
     st.session_state.config = config_temp
 
@@ -88,7 +87,7 @@ def aplicar_estilos():
 
 aplicar_estilos()
 
-# --- BARRA LATERAL (NAVEGACIÓN) ---
+# --- BARRA LATERAL ---
 with st.sidebar:
     if st.session_state.config["logo_base64"]:
         st.markdown(f'<img src="data:image/png;base64,{st.session_state.config["logo_base64"]}" width="100%">', unsafe_allow_html=True)
@@ -147,12 +146,12 @@ if menu == "⚙️ Configuración":
     st.markdown("---")
     st.subheader("📥 Carga de Matrices DEYFOR")
     
-    st.info(f"📊 Estado: {len(st.session_state.config['personal'])} Empleados | {len(st.session_state.config['macroprocesos'])} MP | {len(st.session_state.config['perfiles'])} PP")
+    st.info(f"📊 Estado: {len(st.session_state.config.get('colaboradores', []))} Colaboradores | {len(st.session_state.config['macroprocesos'])} MP | {len(st.session_state.config['perfiles'])} PP")
 
     colA, colB, colC = st.columns(3)
     with colA:
-        st.markdown("**1. Empleados**\n*(DNI | Nombre | PP)*")
-        f_emp = st.file_uploader("Cargar Empleados", type=["xlsx", "csv"], key="f_emp")
+        st.markdown("**1. Colaboradores**\n*(DNI | Nombre | PP | CC | MP)*")
+        f_col = st.file_uploader("Cargar Colaboradores", type=["xlsx", "csv"], key="f_col")
     with colB:
         st.markdown("**2. Macroprocesos**\n*(MP)*")
         f_mp = st.file_uploader("Cargar MP", type=["xlsx", "csv"], key="f_mp")
@@ -162,21 +161,26 @@ if menu == "⚙️ Configuración":
 
     if st.button("💾 GUARDAR TODO"):
         exito = True
-        if f_emp:
-            df = pd.read_csv(f_emp) if f_emp.name.endswith('.csv') else pd.read_excel(f_emp)
-            if set(['DNI', 'Nombre', 'PP']).issubset(df.columns):
-                st.session_state.config["personal"] = df['Nombre'].dropna().astype(str).unique().tolist()
-            else: st.error("Encabezados incorrectos en Empleados"); exito = False
+        if f_col:
+            df = pd.read_csv(f_col) if f_col.name.endswith('.csv') else pd.read_excel(f_col)
+            # Validación actualizada con CC y MP
+            if set(['DNI', 'Nombre', 'PP', 'CC', 'MP']).issubset(df.columns):
+                st.session_state.config["colaboradores"] = df['Nombre'].dropna().astype(str).unique().tolist()
+            else: 
+                st.error("❌ Error: Faltan encabezados en Colaboradores. Requiere: DNI, Nombre, PP, CC, MP")
+                exito = False
         if f_mp:
             df = pd.read_csv(f_mp) if f_mp.name.endswith('.csv') else pd.read_excel(f_mp)
             if 'MP' in df.columns:
                 st.session_state.config["macroprocesos"] = df['MP'].dropna().astype(str).unique().tolist()
-            else: st.error("Encabezado 'MP' no encontrado"); exito = False
+            else: 
+                st.error("Encabezado 'MP' no encontrado"); exito = False
         if f_pp:
             df = pd.read_csv(f_pp) if f_pp.name.endswith('.csv') else pd.read_excel(f_pp)
             if 'PP' in df.columns:
                 st.session_state.config["perfiles"] = df['PP'].dropna().astype(str).unique().tolist()
-            else: st.error("Encabezado 'PP' no encontrado"); exito = False
+            else: 
+                st.error("Encabezado 'PP' no encontrado"); exito = False
 
         if exito:
             guardar_datos('config.json', st.session_state.config)
@@ -186,11 +190,11 @@ if menu == "⚙️ Configuración":
 # --- MÓDULO 2: ANÁLISIS INDIVIDUAL ---
 elif menu == "👤 Análisis Individual":
     st.header("👤 Análisis de Brechas Individual")
-    if not st.session_state.config["personal"]:
+    if not st.session_state.config.get("colaboradores", []):
         st.warning("⚠️ Sube las matrices en Configuración.")
     else:
         c1, c2, c3 = st.columns(3)
-        with c1: nom = st.selectbox("Colaborador", st.session_state.config["personal"])
+        with c1: nom = st.selectbox("Colaborador", st.session_state.config["colaboradores"])
         with c2: mac = st.selectbox("Macroproceso", st.session_state.config["macroprocesos"] if st.session_state.config["macroprocesos"] else ["S/D"])
         with c3: per = st.selectbox("Perfil", st.session_state.config["perfiles"] if st.session_state.config["perfiles"] else ["S/D"])
 
