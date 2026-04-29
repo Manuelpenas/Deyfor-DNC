@@ -36,7 +36,7 @@ config_temp = cargar_datos('config.json', {
     "matriz_cursos": {} 
 })
 
-# Manejo de Favicon
+# Manejo de Favicon Dinámico
 favicon_img = "🚀"
 if config_temp.get("favicon_base64"):
     try:
@@ -101,7 +101,7 @@ if menu == "👤 Análisis Individual":
     st.header("👤 Análisis de Brechas y Desarrollo")
     data = st.session_state.config.get("colaboradores_data", [])
     if not data:
-        st.warning("⚠️ No hay datos de colaboradores. Configure las matrices en el panel de administrador.")
+        st.warning("⚠️ No hay datos cargados. Ingrese a Configuración para subir las matrices.")
     else:
         df = pd.DataFrame(data)
         colab = st.selectbox("Seleccionar Colaborador", ["--"] + df['Nombre'].tolist())
@@ -125,7 +125,7 @@ if menu == "👤 Análisis Individual":
                     if st.button("🚀 GENERAR ANÁLISIS"):
                         aprobados = [k for k, v in check_c.items() if v]
                         avance = round((len(aprobados)/len(cursos))*100, 2)
-                        prompt = f"Analiza impacto DEYFOR. Persona: {colab}. Avance: {avance}%. Cursos faltantes: {[k for k,v in check_c.items() if not v]}. Directo."
+                        prompt = f"Analiza impacto DEYFOR. Persona: {colab}. Puesto: {perfil}. Avance: {avance}%. Cursos faltantes: {[k for k,v in check_c.items() if not v]}. Directo."
                         res = llamar_ia(prompt)
                         st.markdown(f'<div class="report-box">### {colab} - {avance}%<hr>{res}</div>', unsafe_allow_html=True)
                 
@@ -138,67 +138,71 @@ if menu == "👤 Análisis Individual":
                         st.download_button("📥 Descargar PDP", pdp_res, file_name=f"PDP_{colab}.txt")
 
 elif menu == "⚙️ Configuración":
-    st.header("⚙️ Configuración (Acceso Restringido)")
+    st.header("⚙️ Configuración de Administrador")
     
     if not st.session_state.autenticado:
-        pass_input = st.text_input("Contraseña", type="password")
+        pass_input = st.text_input("Ingrese Contraseña", type="password")
         if st.button("Acceder"):
             if pass_input == "D3yf0rE1RL":
                 st.session_state.autenticado = True
                 st.rerun()
             else: st.error("Acceso denegado.")
     else:
-        if st.button("🔒 Salir"):
+        if st.button("🔒 Cerrar Sesión"):
             st.session_state.autenticado = False
             st.rerun()
 
-        # REINCORPORACIÓN DE LOGO E ICONO
         st.subheader("🖼️ Identidad Visual")
         civ1, civ2 = st.columns(2)
         with civ1:
-            f_logo = st.file_uploader("Actualizar Logo (PNG)", type=["png", "jpg"])
+            f_logo = st.file_uploader("Logo (PNG)", type=["png", "jpg"], key="logo_up")
             if f_logo: st.session_state.config["logo_base64"] = base64.b64encode(f_logo.read()).decode()
         with civ2:
-            f_fav = st.file_uploader("Actualizar Icono (Favicon)", type=["ico", "png"])
+            f_fav = st.file_uploader("Icono (Favicon)", type=["ico", "png"], key="fav_up")
             if f_fav: st.session_state.config["favicon_base64"] = base64.b64encode(f_fav.read()).decode()
 
         st.markdown("---")
-        # IA y Datos
+        st.subheader("🤖 Configuración de IA")
         c1, c2, c3 = st.columns(3)
-        with c1: st.session_state.config["api_proveedor"] = st.selectbox("IA", list(PROVEEDORES.keys()))
-        with c2: st.session_state.config["api_key"] = st.text_input("Key", value=st.session_state.config["api_key"], type="password")
+        with c1: st.session_state.config["api_proveedor"] = st.selectbox("Proveedor", list(PROVEEDORES.keys()))
+        with c2: st.session_state.config["api_key"] = st.text_input("API Key", value=st.session_state.config["api_key"], type="password")
         with c3: st.session_state.config["api_modelo"] = st.selectbox("Modelo", PROVEEDORES[st.session_state.config["api_proveedor"]])
 
-        col1, col2, col3 = st.columns(3)
-        with col1: f_col = st.file_uploader("Colaboradores", type=["xlsx"])
-        with col3: f_pp = st.file_uploader("Perfiles", type=["xlsx"])
+        st.markdown("---")
+        st.subheader("📥 Carga de Matrices (Excel)")
+        col_m1, col_m2, col_m3 = st.columns(3)
+        with col_m1: f_col = st.file_uploader("1. Colaboradores", type=["xlsx"], key="col_up")
+        with col_m2: f_mp = st.file_uploader("2. Macroprocesos", type=["xlsx"], key="mp_up")
+        with col_m3: f_pp = st.file_uploader("3. Perfiles", type=["xlsx"], key="pp_up")
 
-        if st.button("💾 GUARDAR TODO"):
+        if st.button("💾 GUARDAR CAMBIOS Y SINCRONIZAR"):
             if f_col: st.session_state.config["colaboradores_data"] = pd.read_excel(f_col).to_dict('records')
+            if f_mp:
+                df_mp_raw = pd.read_excel(f_mp)
+                st.session_state.config["detalles_mp"] = pd.Series(df_mp_raw.Detalle.values, index=df_mp_raw.MP).to_dict()
             if f_pp:
                 df_pp = pd.read_excel(f_pp)
                 matriz = df_pp.groupby('PP')['Cursos_Requeridos'].apply(lambda x: [str(i).strip() for i in x if str(i).lower() != 'nan']).to_dict()
                 st.session_state.config["matriz_cursos"] = {str(k).strip(): v for k, v in matriz.items()}
                 st.session_state.config["perfiles"] = list(st.session_state.config["matriz_cursos"].keys())
             guardar_datos('config.json', st.session_state.config)
-            st.success("✅ Sistema e Identidad actualizados.")
+            st.success("✅ Sistema actualizado correctamente.")
             st.rerun()
 
-# Los módulos de ROI e Historial siguen la misma lógica simplificada previa
 elif menu == "📈 ROI Potente":
     st.header("📈 ROI Estratégico")
-    nom = st.text_input("Capacitación")
-    costo = st.number_input("Inversión S/.")
-    if st.button("Calcular"):
-        st.write(llamar_ia(f"ROI DEYFOR para {nom} costo {costo}."))
+    nom = st.text_input("Nombre de Capacitación")
+    costo = st.number_input("Inversión Estimada S/.")
+    if st.button("Calcular Impacto"):
+        st.write(llamar_ia(f"ROI DEYFOR para {nom} con costo {costo}. Reporte ejecutivo."))
 
 elif menu == "📦 Perfiles y Cursos":
-    st.header("📦 Matriz")
-    p = st.selectbox("Perfil", ["--"] + st.session_state.config.get("perfiles", []))
+    st.header("📦 Matriz por Perfil")
+    p = st.selectbox("Elegir Perfil", ["--"] + st.session_state.config.get("perfiles", []))
     if p != "--":
         for c in st.session_state.config["matriz_cursos"].get(p, []): st.markdown(f"✅ {c}")
 
 elif menu == "📜 Historial":
-    st.header("📜 Historial")
+    st.header("📜 Historial de Consultas")
     for h in reversed(st.session_state.historial):
         with st.expander(f"{h['fecha']} - {h['sujeto']}"): st.markdown(h['resultado'])
