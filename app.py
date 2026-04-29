@@ -6,6 +6,8 @@ from groq import Groq
 from openai import OpenAI
 import base64
 from datetime import datetime
+from PIL import Image
+import io
 
 # --- FUNCIONES DE PERSISTENCIA ---
 def guardar_datos(archivo, datos):
@@ -18,59 +20,67 @@ def cargar_datos(archivo, defecto):
             return json.load(f)
     return defecto
 
-# --- INICIALIZACIÓN DE ESTADOS ---
+# --- CARGA INICIAL DE CONFIGURACIÓN ---
+config_temp = cargar_datos('config.json', {
+    "color_primario": "#2E7D32", 
+    "api_proveedor": "Groq",
+    "api_key": "",
+    "logo_base64": "",
+    "favicon_base64": "",
+    "macroprocesos": [],
+    "perfiles": [],
+    "personal": []
+})
+
+# --- CONFIGURACIÓN DE PÁGINA (DEBE SER LO PRIMERO) ---
+# Intentar cargar favicon desde la configuración
+favicon_img = "📊" # Icono por defecto
+if config_temp["favicon_base64"]:
+    try:
+        favicon_bytes = base64.b64decode(config_temp["favicon_base64"])
+        favicon_img = Image.open(io.BytesIO(favicon_bytes))
+    except:
+        pass
+
+st.set_page_config(
+    page_title="DEYFOR",
+    page_icon=favicon_img,
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# --- INICIALIZACIÓN DE ESTADOS EN SESSION_STATE ---
 if "config" not in st.session_state:
-    st.session_state.config = cargar_datos('config.json', {
-        "color_primario": "#2E7D32", 
-        "api_proveedor": "Groq",
-        "api_key": "",
-        "logo_base64": "",
-        "macroprocesos": ["Operaciones", "SSOMA", "Logística", "Administración"],
-        "perfiles": ["Residente de Obra", "Prevencionista", "Operario", "Supervisor"],
-        "personal": ["Juan Perez", "Maria Gomez", "Carlos Ruiz"]
-    })
+    st.session_state.config = config_temp
 
 if "historial" not in st.session_state:
     st.session_state.historial = cargar_datos('historial.json', [])
 
-if "master_data" not in st.session_state:
-    st.session_state.master_data = None
-
-# --- CONFIGURACIÓN VISUAL DINÁMICA (MODO OSCURO) ---
+# --- CONFIGURACIÓN VISUAL (MODO OSCURO) ---
 def aplicar_estilos():
     cp = st.session_state.config["color_primario"]
     st.markdown(f"""
         <style>
-        /* Fondo general negro absoluto */
         .stApp {{ background-color: #0E1117; }}
-        
-        /* Fondo del menú lateral negro más profundo */
         [data-testid="stSidebar"] {{ background-color: #000000; border-right: 1px solid #333; }}
-        
-        /* Forzar TODAS las letras a blanco */
         h1, h2, h3, h4, h5, h6, p, span, label, div, li {{ color: #FFFFFF !important; }}
-        
-        /* Botones verdes con texto blanco */
         .stButton>button {{ 
             background-color: {cp} !important; 
             color: #FFFFFF !important; 
             border-radius: 8px; 
             font-weight: bold;
             border: none;
+            width: 100%;
         }}
         .stButton>button:hover {{ 
             background-color: #1B5E20 !important; 
             border: 1px solid #FFFFFF;
         }}
-        
-        /* Cajas de texto y desplegables en gris oscuro para que combinen */
         .stTextInput>div>div>input, .stTextArea>div>textarea, .stSelectbox>div>div>div {{
             background-color: #1E1E1E !important;
             color: #FFFFFF !important;
             border: 1px solid #444 !important;
         }}
-        
-        /* Checkboxes y fondos de tablas */
         .stCheckbox>label>span {{ color: #FFFFFF !important; }}
         [data-testid="stDataFrame"] {{ background-color: #1E1E1E !important; }}
         </style>
@@ -83,19 +93,16 @@ with st.sidebar:
     if st.session_state.config["logo_base64"]:
         st.markdown(f'<img src="data:image/png;base64,{st.session_state.config["logo_base64"]}" width="100%">', unsafe_allow_html=True)
     
-    st.title("DEYFOR TMS")
+    st.title("DEYFOR")
     st.markdown("---")
-    menu = st.radio("Módulos del Sistema", 
+    menu = st.radio("Módulos", 
         ["⚙️ Configuración", "👤 Análisis Individual", "📦 Análisis Masivo", "💰 Calculadora ROI", "📜 Historial"])
 
-# --- LÓGICA DE INTELIGENCIA ARTIFICIAL ---
+# --- LÓGICA DE IA ---
 def llamar_ia(prompt):
     prov = st.session_state.config["api_proveedor"]
     key = st.session_state.config["api_key"]
-    
-    if not key:
-        return "⚠️ Error: Configura tu API Key en el módulo de Configuración."
-
+    if not key: return "⚠️ Configura tu API Key primero."
     try:
         if prov == "Groq":
             client = Groq(api_key=key)
@@ -103,14 +110,13 @@ def llamar_ia(prompt):
         else: 
             client = OpenAI(api_key=key)
             model = "gpt-4" if prov == "ChatGPT" else "mixtral-8x7b-32768"
-
         response = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
             model=model,
         )
         return response.choices[0].message.content
     except Exception as e:
-        return f"❌ Error de IA: Verifica tu clave API. Detalle: {str(e)}"
+        return f"❌ Error de IA: {str(e)}"
 
 # --- MÓDULO 1: CONFIGURACIÓN ---
 if menu == "⚙️ Configuración":
@@ -118,171 +124,122 @@ if menu == "⚙️ Configuración":
     
     col1, col2 = st.columns(2)
     with col1:
-        st.subheader("Imagen y Marca")
-        logo = st.file_uploader("Subir Logo (PNG/JPG)", type=["png", "jpg"])
+        st.subheader("Identidad Visual")
+        logo = st.file_uploader("Logo Principal (PNG/JPG)", type=["png", "jpg"], key="logo_up")
         if logo:
             st.session_state.config["logo_base64"] = base64.b64encode(logo.read()).decode()
         
-        color = st.color_picker("Color de Botones", st.session_state.config["color_primario"])
+        favicon = st.file_uploader("Favicon de Pestaña (PNG/ICO)", type=["png", "ico"], key="fav_up")
+        if favicon:
+            st.session_state.config["favicon_base64"] = base64.b64encode(favicon.read()).decode()
+            st.info("💡 El favicon se actualizará al reiniciar o guardar.")
+
+        color = st.color_picker("Color de Marca", st.session_state.config["color_primario"])
         st.session_state.config["color_primario"] = color
 
     with col2:
-        st.subheader("Conectividad IA")
-        proveedor = st.selectbox("Proveedor de IA", 
-            ["Groq", "ChatGPT", "Gemini", "Claude", "OpenRouter", "NVIDIA"])
+        st.subheader("Conexión de IA")
+        proveedor = st.selectbox("IA Engine", ["Groq", "ChatGPT", "Gemini", "Claude", "OpenRouter", "NVIDIA"])
         st.session_state.config["api_proveedor"] = proveedor
-        
-        key = st.text_input("API Key del Proveedor", value=st.session_state.config["api_key"], type="password")
+        key = st.text_input("API Key", value=st.session_state.config["api_key"], type="password")
         st.session_state.config["api_key"] = key
 
     st.markdown("---")
-    st.subheader("📥 Carga de Base de Datos de Deyfor")
+    st.subheader("📥 Carga de Matrices DEYFOR")
     
-    # OPCIÓN 1: SUBIR EXCEL
-    archivo_maestro = st.file_uploader("Sube tu matriz de Excel (.xlsx) o CSV", type=["xlsx", "csv"])
-    if archivo_maestro:
-        try:
-            if archivo_maestro.name.endswith('.csv'):
-                st.session_state.master_data = pd.read_csv(archivo_maestro)
-            else:
-                st.session_state.master_data = pd.read_excel(archivo_maestro)
-            st.success(f"✅ Archivo Excel cargado correctamente. Total filas: {len(st.session_state.master_data)}")
-        except Exception as e:
-            st.error(f"Error al leer el archivo: {e}")
+    st.info(f"📊 Estado: {len(st.session_state.config['personal'])} Empleados | {len(st.session_state.config['macroprocesos'])} MP | {len(st.session_state.config['perfiles'])} PP")
 
-    # OPCIÓN 2: LISTAS MANUALES
-    st.markdown("*(Opcional) Puedes configurar tus listas manualmente aquí:*")
     colA, colB, colC = st.columns(3)
     with colA:
-        macros = st.text_area("1. Macroprocesos", "\n".join(st.session_state.config["macroprocesos"]), height=150)
+        st.markdown("**1. Empleados**\n*(DNI | Nombre | PP)*")
+        f_emp = st.file_uploader("Cargar Empleados", type=["xlsx", "csv"], key="f_emp")
     with colB:
-        perfiles = st.text_area("2. Perfiles de Puesto", "\n".join(st.session_state.config["perfiles"]), height=150)
+        st.markdown("**2. Macroprocesos**\n*(MP)*")
+        f_mp = st.file_uploader("Cargar MP", type=["xlsx", "csv"], key="f_mp")
     with colC:
-        personal = st.text_area("3. Lista de Personal", "\n".join(st.session_state.config["personal"]), height=150)
+        st.markdown("**3. Perfiles**\n*(PP)*")
+        f_pp = st.file_uploader("Cargar PP", type=["xlsx", "csv"], key="f_pp")
 
-    if st.button("💾 Guardar Configuración"):
-        st.session_state.config["macroprocesos"] = [x.strip() for x in macros.split('\n') if x.strip()]
-        st.session_state.config["perfiles"] = [x.strip() for x in perfiles.split('\n') if x.strip()]
-        st.session_state.config["personal"] = [x.strip() for x in personal.split('\n') if x.strip()]
-        
-        guardar_datos('config.json', st.session_state.config)
-        st.success("✅ Configuración guardada exitosamente.")
-        st.rerun()
+    if st.button("💾 GUARDAR TODO"):
+        exito = True
+        if f_emp:
+            df = pd.read_csv(f_emp) if f_emp.name.endswith('.csv') else pd.read_excel(f_emp)
+            if set(['DNI', 'Nombre', 'PP']).issubset(df.columns):
+                st.session_state.config["personal"] = df['Nombre'].dropna().astype(str).unique().tolist()
+            else: st.error("Encabezados incorrectos en Empleados"); exito = False
+        if f_mp:
+            df = pd.read_csv(f_mp) if f_mp.name.endswith('.csv') else pd.read_excel(f_mp)
+            if 'MP' in df.columns:
+                st.session_state.config["macroprocesos"] = df['MP'].dropna().astype(str).unique().tolist()
+            else: st.error("Encabezado 'MP' no encontrado"); exito = False
+        if f_pp:
+            df = pd.read_csv(f_pp) if f_pp.name.endswith('.csv') else pd.read_excel(f_pp)
+            if 'PP' in df.columns:
+                st.session_state.config["perfiles"] = df['PP'].dropna().astype(str).unique().tolist()
+            else: st.error("Encabezado 'PP' no encontrado"); exito = False
+
+        if exito:
+            guardar_datos('config.json', st.session_state.config)
+            st.success("✅ Configuración y matrices guardadas.")
+            st.rerun()
 
 # --- MÓDULO 2: ANÁLISIS INDIVIDUAL ---
 elif menu == "👤 Análisis Individual":
-    st.header("👤 Diagnóstico de Brechas Individual")
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        nombre = st.selectbox("Colaborador", st.session_state.config["personal"])
-    with col2:
-        macro = st.selectbox("Macroproceso", st.session_state.config["macroprocesos"])
-    with col3:
-        perfil = st.selectbox("Perfil de Puesto", st.session_state.config["perfiles"])
+    st.header("👤 Análisis de Brechas Individual")
+    if not st.session_state.config["personal"]:
+        st.warning("⚠️ Sube las matrices en Configuración.")
+    else:
+        c1, c2, c3 = st.columns(3)
+        with c1: nom = st.selectbox("Colaborador", st.session_state.config["personal"])
+        with c2: mac = st.selectbox("Macroproceso", st.session_state.config["macroprocesos"] if st.session_state.config["macroprocesos"] else ["S/D"])
+        with c3: per = st.selectbox("Perfil", st.session_state.config["perfiles"] if st.session_state.config["perfiles"] else ["S/D"])
 
-    st.markdown("---")
-    st.subheader("Competencias Actuales (Marca lo que ya domina)")
-    
-    competencias = ["Normativa ISO 45001", "Trabajos en Altura", "LOTO (Bloqueo y Etiquetado)", "Gestión Logística", "Liderazgo SSOMA", "Manejo Defensivo"]
-    seleccionadas = {}
-    
-    c1, c2 = st.columns(2)
-    for i, c in enumerate(competencias):
-        if i % 2 == 0:
-            with c1: seleccionadas[c] = st.checkbox(c)
-        else:
-            with c2: seleccionadas[c] = st.checkbox(c)
+        st.subheader("Evaluación de Competencias")
+        comps = ["ISO 45001", "Trabajos Altura", "LOTO / Bloqueo", "Gestión Logística", "Liderazgo", "Manejo Defensivo", "Excel"]
+        sels = {}
+        col_a, col_b = st.columns(2)
+        for i, c in enumerate(comps):
+            with (col_a if i%2==0 else col_b): sels[c] = st.checkbox(c)
 
-    if st.button("🧠 Analizar Brechas con IA"):
-        with st.spinner("La IA está calculando las brechas..."):
-            prompt = f"""Actúa como Consultor Experto en Talento de la empresa minera Deyfor.
-            Analiza al colaborador: {nombre}.
-            Macroproceso: {macro}. Perfil: {perfil}.
-            Competencias que domina actualmente: {[k for k, v in seleccionadas.items() if v]}.
-            Competencias de la lista que le faltan: {[k for k, v in seleccionadas.items() if not v]}.
-            
-            Genera un reporte gerencial que incluya:
-            1. Porcentaje estimado de brecha de competencias.
-            2. Riesgos operativos de no capacitarlo en lo que le falta.
-            3. Recomendaciones y plan de acción."""
-            
-            reporte = llamar_ia(prompt)
-            st.markdown(reporte)
-            
-            st.session_state.historial.append({
-                "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "tipo": "Individual",
-                "sujeto": nombre,
-                "perfil": perfil,
-                "resultado": reporte
-            })
-            guardar_datos('historial.json', st.session_state.historial)
+        if st.button("🚀 ANALIZAR"):
+            with st.spinner("IA Analizando..."):
+                prompt = f"Consultor DEYFOR. Colaborador: {nom}. Puesto: {per}. Domina: {[k for k,v in sels.items() if v]}. Faltan: {[k for k,v in sels.items() if not v]}. Reporte de brecha %, riesgos y plan de acción."
+                res = llamar_ia(prompt)
+                st.markdown(res)
+                st.session_state.historial.append({"fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "sujeto": nom, "perfil": per, "resultado": res})
+                guardar_datos('historial.json', st.session_state.historial)
 
 # --- MÓDULO 3: ANÁLISIS MASIVO ---
 elif menu == "📦 Análisis Masivo":
-    st.header("📦 Perfilamiento Estándar por Puesto")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        macro = st.selectbox("Seleccionar Macroproceso", st.session_state.config["macroprocesos"])
-    with col2:
-        perfil = st.selectbox("Seleccionar Perfil", st.session_state.config["perfiles"])
-    
-    if st.button("🏗️ Construir Matriz de Puesto con IA"):
-        with st.spinner("Consultando estándares de la industria minera..."):
-            prompt = f"""Eres el Gerente de Operaciones de Deyfor. 
-            Define el perfil ideal de competencias duras y blandas para el puesto de '{perfil}' dentro del macroproceso de '{macro}'.
-            Enfócate en requisitos de seguridad (SSOMA), eficiencia y normativas aplicables."""
-            
-            resultado = llamar_ia(prompt)
-            st.markdown(resultado)
+    st.header("📦 Perfilamiento por Puesto")
+    if not st.session_state.config["perfiles"]:
+        st.warning("⚠️ Sube las matrices primero.")
+    else:
+        mac = st.selectbox("Macroproceso", st.session_state.config["macroprocesos"])
+        per = st.selectbox("Perfil", st.session_state.config["perfiles"])
+        if st.button("🏗️ GENERAR ESTÁNDAR"):
+            with st.spinner("Consultando estándares..."):
+                res = llamar_ia(f"Define perfil ideal para '{per}' en '{mac}' para DEYFOR (Minería). Competencias SSOMA y técnicas.")
+                st.markdown(res)
 
 # --- MÓDULO 4: CALCULADORA ROI ---
 elif menu == "💰 Calculadora ROI":
-    st.header("💰 Cálculo de Retorno de Inversión (ROI)")
-    
-    with st.form("roi_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            capacitacion = st.text_input("Nombre de la Capacitación")
-            n_part = st.number_input("Número de Participantes", min_value=1)
-        with col2:
-            costo_total = st.number_input("Inversión Total (S/.)", min_value=0.0)
-        
-        st.markdown("---")
-        st.subheader("Beneficios y Ahorros Esperados")
-        acc = st.slider("Reducción de Accidentes / Incidentes (%)", 0, 100, 15)
-        prod = st.slider("Incremento de Productividad Operativa (%)", 0, 100, 10)
-        err = st.slider("Reducción de Errores / Reprocesos (%)", 0, 100, 20)
-        
-        if st.form_submit_button("📊 Calcular Impacto Financiero con IA"):
-            with st.spinner("Procesando viabilidad financiera..."):
-                prompt = f"""Actúa como Director Financiero (CFO). Calcula el ROI cualitativo y estimado cuantitativo para:
-                Capacitación: {capacitacion}. Participantes: {n_part}. Costo: S/. {costo_total}.
-                Proyección de impacto: Reducción accidentes ({acc}%), Aumento productividad ({prod}%), Reducción reprocesos ({err}%).
-                
-                Entrega un reporte con:
-                1. Justificación de la inversión.
-                2. Ahorros ocultos proyectados (evitar multas, horas hombre perdidas).
-                3. Conclusión de viabilidad (Aprobado/Rechazado)."""
-                
-                analisis = llamar_ia(prompt)
-                st.write(analisis)
+    st.header("💰 Calculadora ROI de Capacitación")
+    with st.form("roi"):
+        cap = st.text_input("Capacitación")
+        n = st.number_input("Participantes", 1)
+        cost = st.number_input("Inversión (S/.)", 0.0)
+        acc = st.slider("% Reducción Accidentes", 0, 100, 20)
+        if st.form_submit_button("📊 CALCULAR"):
+            res = llamar_ia(f"CFO Análisis ROI: {cap}, {n} pers, S/. {cost}, {acc}% menos accidentes. Viabilidad y ahorros.")
+            st.write(res)
 
 # --- MÓDULO 5: HISTORIAL ---
 elif menu == "📜 Historial":
-    st.header("📜 Historial de Evaluaciones")
-    if not st.session_state.historial:
-        st.info("No hay registros guardados aún.")
-    else:
-        df_hist = pd.DataFrame(st.session_state.historial)
-        st.dataframe(df_hist[["fecha", "tipo", "sujeto", "perfil"]], use_container_width=True)
-        
-        st.markdown("---")
-        st.subheader("Ver Detalle Completo")
-        idx = st.number_input("Ingresa el número de fila (índice) que deseas revisar:", min_value=0, max_value=len(df_hist)-1, step=1)
-        
-        if st.button("Ver Reporte"):
-            st.markdown(f"### Reporte de: {df_hist.iloc[idx]['sujeto']} ({df_hist.iloc[idx]['fecha']})")
-            st.markdown(df_hist.iloc[idx]["resultado"])
+    st.header("📜 Historial")
+    if st.session_state.historial:
+        df = pd.DataFrame(st.session_state.historial)
+        st.dataframe(df[["fecha", "sujeto", "perfil"]], use_container_width=True)
+        idx = st.number_input("Ver índice", 0, len(df)-1)
+        if st.button("VER REPORTE"):
+            st.markdown(df.iloc[idx]["resultado"])
