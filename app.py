@@ -36,7 +36,6 @@ config_temp = cargar_datos('config.json', {
     "matriz_cursos": {} 
 })
 
-# Configuración de Favicon Dinámico
 favicon_img = "🚀"
 if config_temp.get("favicon_base64"):
     try:
@@ -98,38 +97,32 @@ def llamar_ia(prompt):
 with st.sidebar:
     if st.session_state.config.get("logo_base64"):
         st.markdown(f'<img src="data:image/png;base64,{st.session_state.config["logo_base64"]}" width="100%">', unsafe_allow_html=True)
-    menu = st.radio("GESTIÓN DEYFOR", ["⚙️ Configuración", "👤 Análisis Individual", "📦 Análisis Masivo", "📈 ROI Potente", "📜 Historial"])
+    menu = st.radio("GESTIÓN DEYFOR", ["⚙️ Configuración", "👤 Análisis Individual", "📦 Perfiles y Cursos", "📈 ROI Potente", "📜 Historial"])
 
-# --- MODULO 1: CONFIGURACIÓN ---
+# --- MODULOS ---
 if menu == "⚙️ Configuración":
     st.header("⚙️ Configuración")
-    
-    # Identidad Visual
     c_v1, c_v2 = st.columns(2)
     with c_v1:
-        f_logo = st.file_uploader("Subir Logo (PNG/JPG)", type=["png", "jpg"])
+        f_logo = st.file_uploader("Subir Logo", type=["png", "jpg"])
         if f_logo: st.session_state.config["logo_base64"] = base64.b64encode(f_logo.read()).decode()
     with c_v2:
-        f_fav = st.file_uploader("Subir Favicon (ICO/PNG)", type=["ico", "png"])
+        f_fav = st.file_uploader("Subir Favicon", type=["ico", "png"])
         if f_fav: st.session_state.config["favicon_base64"] = base64.b64encode(f_fav.read()).decode()
 
     st.markdown("---")
-    
-    # IA y Modelos
     c1, c2, c3 = st.columns(3)
     with c1: st.session_state.config["api_proveedor"] = st.selectbox("IA Engine", list(PROVEEDORES.keys()))
     with c2: st.session_state.config["api_key"] = st.text_input("API Key", value=st.session_state.config["api_key"], type="password")
     with c3: st.session_state.config["api_modelo"] = st.selectbox("Modelo", PROVEEDORES.get(st.session_state.config["api_proveedor"], ["Cargando..."]))
 
     st.markdown("---")
-    
-    # Carga de Matrices
     col1, col2, col3 = st.columns(3)
-    with col1: f_col = st.file_uploader("Cargar Colaboradores", type=["xlsx"])
-    with col2: f_mp = st.file_uploader("Cargar Macroprocesos", type=["xlsx"])
-    with col3: f_pp = st.file_uploader("Cargar Perfiles", type=["xlsx"])
+    with col1: f_col = st.file_uploader("Cargar Colaboradores (Excel)", type=["xlsx"])
+    with col2: f_mp = st.file_uploader("Cargar Macroprocesos (Excel)", type=["xlsx"])
+    with col3: f_pp = st.file_uploader("Cargar Perfiles Base (Excel)", type=["xlsx"])
 
-    if st.button("💾 GUARDAR Y ACTUALIZAR TODO"):
+    if st.button("💾 GUARDAR Y ACTUALIZAR"):
         if f_col: st.session_state.config["colaboradores_data"] = pd.read_excel(f_col).to_dict('records')
         if f_mp:
             df_mp = pd.read_excel(f_mp)
@@ -140,10 +133,63 @@ if menu == "⚙️ Configuración":
             st.session_state.config["matriz_cursos"] = {str(k).strip(): v for k, v in matriz.items()}
             st.session_state.config["perfiles"] = list(st.session_state.config["matriz_cursos"].keys())
         guardar_datos('config.json', st.session_state.config)
-        st.success("✅ Configuración e Identidad sincronizadas.")
+        st.success("✅ Datos sincronizados.")
         st.rerun()
 
-# --- MANTENER RESTO DE MÓDULOS ---
+elif menu == "📦 Perfiles y Cursos":
+    st.header("📦 Gestión de Perfiles y Matriz de Cursos")
+    p_sel = st.selectbox("Seleccionar Perfil", ["--"] + st.session_state.config.get("perfiles", []))
+    
+    if p_sel != "--":
+        cursos_p = st.session_state.config.get("matriz_cursos", {}).get(p_sel, [])
+        st.subheader(f"Cursos para: {p_sel}")
+        for c in cursos_p: st.markdown(f"✅ {c}")
+        
+        st.markdown("---")
+        with st.expander("➕ Agregar curso manualmente a este perfil"):
+            nuevo_curso = st.text_input("Nombre del nuevo curso")
+            if st.button("Añadir Curso"):
+                if nuevo_curso and nuevo_curso not in st.session_state.config["matriz_cursos"][p_sel]:
+                    st.session_state.config["matriz_cursos"][p_sel].append(nuevo_curso)
+                    guardar_datos('config.json', st.session_state.config)
+                    st.success(f"Curso '{nuevo_curso}' añadido.")
+                    st.rerun()
+
+        if st.button("⚖️ Análisis de Vigencia y Condiciones Industriales"):
+            prompt = f"Analiza si los cursos para {p_sel} ({cursos_p}) siguen vigentes según las normativas SSOMA actuales en Perú para el sector minero/industrial. Indica si han cambiado las condiciones y qué falta."
+            with st.spinner("IA analizando condiciones actuales..."):
+                res = llamar_ia(prompt)
+                st.markdown(f'<div class="report-box">{res}</div>', unsafe_allow_html=True)
+
+elif menu == "📈 ROI Potente":
+    st.header("📈 Calculadora de ROI")
+    
+    # Obtener lista única de todos los cursos cargados en el sistema
+    todos_los_cursos = sorted(list(set([curso for lista in st.session_state.config.get("matriz_cursos", {}).values() for curso in lista])))
+    
+    c1, c2, c3 = st.columns(3)
+    with c1: 
+        nom_cap = st.selectbox("Seleccionar Curso de la Matriz", ["-- Personalizado --"] + todos_los_cursos)
+        if nom_cap == "-- Personalizado --":
+            nom_cap = st.text_input("Nombre de la Capacitación")
+    with c2: costo_cap = st.number_input("Costo Inversión (S/.)")
+    with c3: cant_part = st.number_input("Participantes", min_value=1)
+    
+    b1, b2 = st.columns(2)
+    with b1:
+        a_acc = st.number_input("Ahorro Accidentes Estimado")
+        i_prod = st.number_input("Incremento Productividad")
+    with b2:
+        r_err = st.number_input("Reducción Errores/Mermas")
+        p_mul = st.number_input("Prevención de Multas")
+            
+    if st.button("📊 CALCULAR ROI"):
+        prompt = f"ROI DEYFOR. Capacitación: {nom_cap}. Inversión: {costo_cap}. Beneficios: Accidentes {a_acc}, Productividad {i_prod}, Errores {r_err}, Multas {p_mul}. Reporte ejecutivo directo."
+        with st.spinner("Calculando impacto financiero..."):
+            res = llamar_ia(prompt)
+            st.markdown(f'<div class="report-box">### Análisis ROI: {nom_cap}<hr>{res}</div>', unsafe_allow_html=True)
+
+# El resto de módulos (Análisis Individual e Historial) se mantienen iguales a la versión anterior para no afectar la estabilidad.
 elif menu == "👤 Análisis Individual":
     st.header("👤 Análisis Individual")
     data = st.session_state.config.get("colaboradores_data", [])
@@ -164,38 +210,12 @@ elif menu == "👤 Análisis Individual":
                 if st.button("🚀 GENERAR REPORTE"):
                     aprobados = [k for k, v in check_c.items() if v]
                     avance = round((len(aprobados)/len(cursos))*100, 2)
-                    prompt = f"Analiza para DEYFOR. Persona: {colab}. Perfil: {perfil}. Avance: {avance}%. Cursos faltantes: {[k for k,v in check_c.items() if not v]}. Directo al grano."
-                    with st.spinner("IA analizando..."):
+                    prompt = f"Analiza para DEYFOR. Persona: {colab}. Puesto: {perfil}. Avance: {avance}%. Cursos faltantes: {[k for k,v in check_c.items() if not v]}. Directo al grano."
+                    with st.spinner("Analizando..."):
                         res = llamar_ia(prompt)
                         st.markdown(f'<div class="report-box">### {colab}<br>**Avance:** {avance}%<hr>{res}</div>', unsafe_allow_html=True)
                         st.session_state.historial.append({"fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "sujeto": colab, "resultado": res})
                         guardar_datos('historial.json', st.session_state.historial)
-
-elif menu == "📦 Análisis Masivo":
-    st.header("📦 Perfiles")
-    p_sel = st.selectbox("Seleccionar Perfil", ["--"] + st.session_state.config.get("perfiles", []))
-    if p_sel != "--":
-        cursos_p = st.session_state.config.get("matriz_cursos", {}).get(p_sel, [])
-        for c in cursos_p: st.markdown(f"✅ {c}")
-
-elif menu == "📈 ROI Potente":
-    st.header("📈 Calculadora ROI")
-    c1, c2, c3 = st.columns(3)
-    with c1: nom_cap = st.text_input("Capacitación")
-    with c2: costo_cap = st.number_input("Costo Inversión (S/.)")
-    with c3: cant_part = st.number_input("Participantes", min_value=1)
-    b1, b2 = st.columns(2)
-    with b1:
-        a_acc = st.number_input("Ahorro Accidentes")
-        i_prod = st.number_input("Mejora Productividad")
-    with b2:
-        r_err = st.number_input("Reducción Errores")
-        p_mul = st.number_input("Prevención Multas")
-    if st.button("📊 CALCULAR ROI"):
-        prompt = f"ROI DEYFOR. Capacitación: {nom_cap}. Inversión: {costo_cap}. Ahorros: Accidentes {a_acc}, Productividad {i_prod}, Errores {r_err}, Multas {p_mul}. Sin fórmulas."
-        with st.spinner("Calculando..."):
-            res = llamar_ia(prompt)
-            st.markdown(f'<div class="report-box">### ROI: {nom_cap}<hr>{res}</div>', unsafe_allow_html=True)
 
 elif menu == "📜 Historial":
     st.header("📜 Historial")
