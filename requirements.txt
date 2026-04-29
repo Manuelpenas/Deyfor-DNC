@@ -3,3 +3,5 @@ pandas
 openpyxl
 groq
 openai
+google-generativeai
+Pillow
