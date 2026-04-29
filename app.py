@@ -110,6 +110,7 @@ if menu == "⚙️ Configuración":
         f_pp = st.file_uploader("Subir Excel", type=["xlsx"], key="f_pp")
 
     if st.button("💾 GUARDAR Y SINCRONIZAR DATOS"):
+        exito = True
         if f_col:
             st.session_state.config["colaboradores_data"] = pd.read_excel(f_col).to_dict('records')
         if f_mp:
@@ -118,17 +119,22 @@ if menu == "⚙️ Configuración":
             st.session_state.config["detalles_mp"] = pd.Series(df_mp.Detalle.values, index=df_mp.MP).to_dict()
         if f_pp:
             df_pp = pd.read_excel(f_pp)
-            st.session_state.config["perfiles"] = df_pp['PP'].unique().tolist()
-            # Crear matriz de cursos: separa por comas si hay varios cursos en una celda
-            matriz = {}
-            for _, row in df_pp.iterrows():
-                cursos = str(row['Cursos_Requeridos']).split(',')
-                matriz[row['PP']] = [c.strip() for c in cursos if c.strip()]
-            st.session_state.config["matriz_cursos"] = matriz
+            # Verificamos si existe la columna para evitar el error KeyError
+            if 'PP' in df_pp.columns and 'Cursos_Requeridos' in df_pp.columns:
+                st.session_state.config["perfiles"] = df_pp['PP'].unique().tolist()
+                matriz = {}
+                for _, row in df_pp.iterrows():
+                    cursos = str(row['Cursos_Requeridos']).split(',')
+                    matriz[row['PP']] = [c.strip() for c in cursos if c.strip() and c.lower() != 'nan']
+                st.session_state.config["matriz_cursos"] = matriz
+            else:
+                st.error("❌ El Excel de Perfiles debe tener los encabezados exactos: 'PP' y 'Cursos_Requeridos'")
+                exito = False
             
-        guardar_datos('config.json', st.session_state.config)
-        st.success("✅ Matrices sincronizadas. Los perfiles ahora incluyen sus cursos.")
-        st.rerun()
+        if exito:
+            guardar_datos('config.json', st.session_state.config)
+            st.success("✅ Matrices sincronizadas con éxito.")
+            st.rerun()
 
 # --- MÓDULO 2: ANÁLISIS INDIVIDUAL ---
 elif menu == "👤 Análisis Individual":
@@ -146,29 +152,30 @@ elif menu == "👤 Análisis Individual":
             
             st.info(f"📍 **Perfil Detectado:** {pp_actual} | **CC:** {info['CC']} | **MP:** {info['MP']}")
             
-            # Jalar cursos desde la matriz de perfiles
             cursos_perfil = st.session_state.config.get("matriz_cursos", {}).get(pp_actual, [])
             
             if not cursos_perfil:
-                st.error(f"❌ No hay cursos configurados para el perfil '{pp_actual}'. Revise la matriz de Perfiles.")
+                st.error(f"❌ No hay cursos configurados para el perfil '{pp_actual}'. Revise su Excel de Perfiles.")
             else:
-                st.subheader(f"📚 Cursos Obligatorios para {pp_actual}")
-                st.write("Seleccione los cursos que el colaborador **YA TIENE APROBADOS**:")
+                st.subheader(f"📚 Matriz de Entrenamiento: {pp_actual}")
+                st.write("Marque los cursos que el colaborador **YA TIENE APROBADOS**:")
                 check_cursos = {}
                 col_a, col_b = st.columns(2)
                 for i, curso in enumerate(cursos_perfil):
                     with (col_a if i%2==0 else col_b):
                         check_cursos[curso] = st.checkbox(curso)
                 
-                if st.button("🚀 ANALIZAR CON IA"):
+                if st.button("🚀 ANALIZAR BRECHAS"):
                     aprobados = [c for c, v in check_cursos.items() if v]
                     pendientes = [c for c, v in check_cursos.items() if not v]
                     
-                    prompt = f"""Consultor DEYFOR. Colaborador: {seleccionado}. Puesto: {pp_actual}. 
-                    MP: {info['MP']}. Cursos Aprobados: {aprobados}. Cursos Pendientes: {pendientes}.
-                    Genera: 1. % Cumplimiento. 2. Riesgos Críticos. 3. Plan de entrenamiento inmediato."""
+                    prompt = f"""Consultor DEYFOR. Analiza a {seleccionado}. Puesto: {pp_actual}. 
+                    MP: {info['MP']}. 
+                    Cursos que ya tiene: {aprobados}. 
+                    Cursos que le faltan: {pendientes}.
+                    Genera: 1. % Cumplimiento. 2. Riesgos. 3. Recomendaciones."""
                     
-                    with st.spinner("Generando reporte..."):
+                    with st.spinner("IA Analizando..."):
                         res = llamar_ia(prompt)
                         st.markdown(res)
                         st.session_state.historial.append({
@@ -178,20 +185,9 @@ elif menu == "👤 Análisis Individual":
                         })
                         guardar_datos('historial.json', st.session_state.historial)
 
-# --- MÓDULO 3: ANÁLISIS MASIVO ---
-elif menu == "📦 Análisis Masivo":
-    st.header("📦 Perfilamiento Masivo")
-    per = st.selectbox("Seleccione Perfil a Consultar", st.session_state.config.get("perfiles", []))
-    if per:
-        cursos = st.session_state.config.get("matriz_cursos", {}).get(per, [])
-        st.write(f"**Cursos asociados en matriz:** {', '.join(cursos)}")
-        if st.button("🏗️ Generar Estándar de Competencias"):
-            st.write(llamar_ia(f"Define el estándar de éxito para el perfil {per} en DEYFOR, considerando que debe dominar: {cursos}"))
-
 # --- MÓDULO 4: CALCULADORA ROI ---
 elif menu == "💰 Calculadora ROI":
     st.header("💰 ROI y Eficiencia")
-    # ... (Se mantiene el código del ROI con los sliders de productividad y mermas anterior)
     with st.form("roi_f"):
         c1, c2 = st.columns(2)
         with c1: 
@@ -200,18 +196,25 @@ elif menu == "💰 Calculadora ROI":
         with c2:
             prod = st.slider("% Mejora Productividad", 0, 100, 10)
             merma = st.slider("% Reducción Mermas", 0, 100, 10)
-        if st.form_submit_button("Calcular"):
+        if st.form_submit_button("Calcular Impacto"):
             st.write(llamar_ia(f"Análisis financiero DEYFOR: {cap}, costo S/.{costo}, mejora prod {prod}%, reduce merma {merma}%."))
 
 # --- MÓDULO 5: HISTORIAL ---
 elif menu == "📜 Historial":
     st.header("📜 Historial")
-    # ... (Se mantiene el código de edición y eliminación anterior)
     if st.session_state.historial:
         df_h = pd.DataFrame(st.session_state.historial)
         idx = st.selectbox("Registro", range(len(df_h)), format_func=lambda i: f"{df_h.iloc[i]['fecha']} - {df_h.iloc[i]['sujeto']}")
-        if st.button("Borrar Seleccionado"):
-            st.session_state.historial.pop(idx)
-            guardar_datos('historial.json', st.session_state.historial)
-            st.rerun()
-        st.markdown(st.session_state.historial[idx]['resultado'])
+        
+        col_v, col_b = st.columns([4,1])
+        with col_v:
+            st.markdown(st.session_state.historial[idx]['resultado'])
+        with col_b:
+            if st.button("🗑️ Borrar"):
+                st.session_state.historial.pop(idx)
+                guardar_datos('historial.json', st.session_state.historial)
+                st.rerun()
+
+elif menu == "📦 Análisis Masivo":
+    st.header("📦 Perfilamiento Masivo")
+    st.info("Utilice este módulo para definir los estándares de nuevos puestos cargados.")
