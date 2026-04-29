@@ -21,7 +21,7 @@ def cargar_datos(archivo, defecto):
 # --- INICIALIZACIÓN DE ESTADOS ---
 if "config" not in st.session_state:
     st.session_state.config = cargar_datos('config.json', {
-        "color_primario": "#2E7D32", # Verde Corporativo Elegante (Forest Green)
+        "color_primario": "#2E7D32", 
         "api_proveedor": "Groq",
         "api_key": "",
         "logo_base64": "",
@@ -33,32 +33,46 @@ if "config" not in st.session_state:
 if "historial" not in st.session_state:
     st.session_state.historial = cargar_datos('historial.json', [])
 
-# --- CONFIGURACIÓN VISUAL DINÁMICA ---
+if "master_data" not in st.session_state:
+    st.session_state.master_data = None
+
+# --- CONFIGURACIÓN VISUAL DINÁMICA (MODO OSCURO) ---
 def aplicar_estilos():
     cp = st.session_state.config["color_primario"]
     st.markdown(f"""
         <style>
-        /* Fondo general blanco para máxima legibilidad */
-        .stApp {{ background-color: #F8FAF8; }}
+        /* Fondo general negro absoluto */
+        .stApp {{ background-color: #0E1117; }}
         
-        /* Botones con fondo verde y texto blanco brillante */
+        /* Fondo del menú lateral negro más profundo */
+        [data-testid="stSidebar"] {{ background-color: #000000; border-right: 1px solid #333; }}
+        
+        /* Forzar TODAS las letras a blanco */
+        h1, h2, h3, h4, h5, h6, p, span, label, div, li {{ color: #FFFFFF !important; }}
+        
+        /* Botones verdes con texto blanco */
         .stButton>button {{ 
-            background-color: {cp}; 
-            color: #FFFFFF; 
+            background-color: {cp} !important; 
+            color: #FFFFFF !important; 
             border-radius: 8px; 
             font-weight: bold;
             border: none;
         }}
         .stButton>button:hover {{ 
-            background-color: #1B5E20; 
-            color: #FFFFFF; 
+            background-color: #1B5E20 !important; 
+            border: 1px solid #FFFFFF;
         }}
         
-        /* Títulos en verde oscuro para contraste */
-        h1, h2, h3 {{ color: {cp}; font-weight: 800; }}
+        /* Cajas de texto y desplegables en gris oscuro para que combinen */
+        .stTextInput>div>div>input, .stTextArea>div>textarea, .stSelectbox>div>div>div {{
+            background-color: #1E1E1E !important;
+            color: #FFFFFF !important;
+            border: 1px solid #444 !important;
+        }}
         
-        /* Textos de las cajas de configuración */
-        label {{ font-weight: 600; color: #333333; }}
+        /* Checkboxes y fondos de tablas */
+        .stCheckbox>label>span {{ color: #FFFFFF !important; }}
+        [data-testid="stDataFrame"] {{ background-color: #1E1E1E !important; }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -70,6 +84,7 @@ with st.sidebar:
         st.markdown(f'<img src="data:image/png;base64,{st.session_state.config["logo_base64"]}" width="100%">', unsafe_allow_html=True)
     
     st.title("DEYFOR TMS")
+    st.markdown("---")
     menu = st.radio("Módulos del Sistema", 
         ["⚙️ Configuración", "👤 Análisis Individual", "📦 Análisis Masivo", "💰 Calculadora ROI", "📜 Historial"])
 
@@ -108,7 +123,7 @@ if menu == "⚙️ Configuración":
         if logo:
             st.session_state.config["logo_base64"] = base64.b64encode(logo.read()).decode()
         
-        color = st.color_picker("Color Principal del Sistema", st.session_state.config["color_primario"])
+        color = st.color_picker("Color de Botones", st.session_state.config["color_primario"])
         st.session_state.config["color_primario"] = color
 
     with col2:
@@ -121,19 +136,31 @@ if menu == "⚙️ Configuración":
         st.session_state.config["api_key"] = key
 
     st.markdown("---")
-    st.subheader("Bases de Datos de Deyfor (Escribe o Pega tus listas)")
-    st.markdown("Ingresa los datos separados por un salto de línea (uno por renglón). Estos aparecerán en los menús desplegables del sistema.")
+    st.subheader("📥 Carga de Base de Datos de Deyfor")
     
+    # OPCIÓN 1: SUBIR EXCEL
+    archivo_maestro = st.file_uploader("Sube tu matriz de Excel (.xlsx) o CSV", type=["xlsx", "csv"])
+    if archivo_maestro:
+        try:
+            if archivo_maestro.name.endswith('.csv'):
+                st.session_state.master_data = pd.read_csv(archivo_maestro)
+            else:
+                st.session_state.master_data = pd.read_excel(archivo_maestro)
+            st.success(f"✅ Archivo Excel cargado correctamente. Total filas: {len(st.session_state.master_data)}")
+        except Exception as e:
+            st.error(f"Error al leer el archivo: {e}")
+
+    # OPCIÓN 2: LISTAS MANUALES
+    st.markdown("*(Opcional) Puedes configurar tus listas manualmente aquí:*")
     colA, colB, colC = st.columns(3)
     with colA:
-        macros = st.text_area("1. Macroprocesos", "\n".join(st.session_state.config["macroprocesos"]), height=200)
+        macros = st.text_area("1. Macroprocesos", "\n".join(st.session_state.config["macroprocesos"]), height=150)
     with colB:
-        perfiles = st.text_area("2. Perfiles de Puesto", "\n".join(st.session_state.config["perfiles"]), height=200)
+        perfiles = st.text_area("2. Perfiles de Puesto", "\n".join(st.session_state.config["perfiles"]), height=150)
     with colC:
-        personal = st.text_area("3. Lista de Personal", "\n".join(st.session_state.config["personal"]), height=200)
+        personal = st.text_area("3. Lista de Personal", "\n".join(st.session_state.config["personal"]), height=150)
 
-    if st.button("💾 Guardar Toda la Configuración"):
-        # Limpiamos las listas para que no queden espacios vacíos
+    if st.button("💾 Guardar Configuración"):
         st.session_state.config["macroprocesos"] = [x.strip() for x in macros.split('\n') if x.strip()]
         st.session_state.config["perfiles"] = [x.strip() for x in perfiles.split('\n') if x.strip()]
         st.session_state.config["personal"] = [x.strip() for x in personal.split('\n') if x.strip()]
@@ -146,76 +173,70 @@ if menu == "⚙️ Configuración":
 elif menu == "👤 Análisis Individual":
     st.header("👤 Diagnóstico de Brechas Individual")
     
-    if not st.session_state.config["personal"]:
-        st.warning("⚠️ Ve a Configuración y agrega los nombres de tu personal primero.")
-    else:
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            nombre = st.selectbox("Colaborador", st.session_state.config["personal"])
-        with col2:
-            macro = st.selectbox("Macroproceso", st.session_state.config["macroprocesos"])
-        with col3:
-            perfil = st.selectbox("Perfil de Puesto", st.session_state.config["perfiles"])
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        nombre = st.selectbox("Colaborador", st.session_state.config["personal"])
+    with col2:
+        macro = st.selectbox("Macroproceso", st.session_state.config["macroprocesos"])
+    with col3:
+        perfil = st.selectbox("Perfil de Puesto", st.session_state.config["perfiles"])
 
-        st.markdown("---")
-        st.subheader("Competencias Actuales (Marca lo que ya domina)")
-        
-        competencias = ["Normativa ISO 45001", "Trabajos en Altura", "LOTO (Bloqueo y Etiquetado)", "Gestión Logística", "Liderazgo SSOMA", "Manejo Defensivo"]
-        seleccionadas = {}
-        
-        c1, c2 = st.columns(2)
-        for i, c in enumerate(competencias):
-            if i % 2 == 0:
-                with c1: seleccionadas[c] = st.checkbox(c)
-            else:
-                with c2: seleccionadas[c] = st.checkbox(c)
+    st.markdown("---")
+    st.subheader("Competencias Actuales (Marca lo que ya domina)")
+    
+    competencias = ["Normativa ISO 45001", "Trabajos en Altura", "LOTO (Bloqueo y Etiquetado)", "Gestión Logística", "Liderazgo SSOMA", "Manejo Defensivo"]
+    seleccionadas = {}
+    
+    c1, c2 = st.columns(2)
+    for i, c in enumerate(competencias):
+        if i % 2 == 0:
+            with c1: seleccionadas[c] = st.checkbox(c)
+        else:
+            with c2: seleccionadas[c] = st.checkbox(c)
 
-        if st.button("🧠 Analizar Brechas con IA"):
-            with st.spinner("La IA está calculando las brechas..."):
-                prompt = f"""Actúa como Consultor Experto en Talento de la empresa minera Deyfor.
-                Analiza al colaborador: {nombre}.
-                Macroproceso: {macro}. Perfil: {perfil}.
-                Competencias que domina actualmente: {[k for k, v in seleccionadas.items() if v]}.
-                Competencias de la lista que le faltan: {[k for k, v in seleccionadas.items() if not v]}.
-                
-                Genera un reporte gerencial que incluya:
-                1. Porcentaje estimado de brecha de competencias.
-                2. Riesgos operativos de no capacitarlo en lo que le falta.
-                3. Recomendaciones y plan de acción."""
-                
-                reporte = llamar_ia(prompt)
-                st.markdown(reporte)
-                
-                st.session_state.historial.append({
-                    "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    "tipo": "Individual",
-                    "sujeto": nombre,
-                    "perfil": perfil,
-                    "resultado": reporte
-                })
-                guardar_datos('historial.json', st.session_state.historial)
+    if st.button("🧠 Analizar Brechas con IA"):
+        with st.spinner("La IA está calculando las brechas..."):
+            prompt = f"""Actúa como Consultor Experto en Talento de la empresa minera Deyfor.
+            Analiza al colaborador: {nombre}.
+            Macroproceso: {macro}. Perfil: {perfil}.
+            Competencias que domina actualmente: {[k for k, v in seleccionadas.items() if v]}.
+            Competencias de la lista que le faltan: {[k for k, v in seleccionadas.items() if not v]}.
+            
+            Genera un reporte gerencial que incluya:
+            1. Porcentaje estimado de brecha de competencias.
+            2. Riesgos operativos de no capacitarlo en lo que le falta.
+            3. Recomendaciones y plan de acción."""
+            
+            reporte = llamar_ia(prompt)
+            st.markdown(reporte)
+            
+            st.session_state.historial.append({
+                "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "tipo": "Individual",
+                "sujeto": nombre,
+                "perfil": perfil,
+                "resultado": reporte
+            })
+            guardar_datos('historial.json', st.session_state.historial)
 
 # --- MÓDULO 3: ANÁLISIS MASIVO ---
 elif menu == "📦 Análisis Masivo":
     st.header("📦 Perfilamiento Estándar por Puesto")
     
-    if not st.session_state.config["perfiles"]:
-        st.warning("⚠️ Ve a Configuración y agrega tus perfiles primero.")
-    else:
-        col1, col2 = st.columns(2)
-        with col1:
-            macro = st.selectbox("Seleccionar Macroproceso", st.session_state.config["macroprocesos"])
-        with col2:
-            perfil = st.selectbox("Seleccionar Perfil", st.session_state.config["perfiles"])
-        
-        if st.button("🏗️ Construir Matriz de Puesto con IA"):
-            with st.spinner("Consultando estándares de la industria minera..."):
-                prompt = f"""Eres el Gerente de Operaciones de Deyfor. 
-                Define el perfil ideal de competencias duras y blandas para el puesto de '{perfil}' dentro del macroproceso de '{macro}'.
-                Enfócate en requisitos de seguridad (SSOMA), eficiencia y normativas aplicables."""
-                
-                resultado = llamar_ia(prompt)
-                st.markdown(resultado)
+    col1, col2 = st.columns(2)
+    with col1:
+        macro = st.selectbox("Seleccionar Macroproceso", st.session_state.config["macroprocesos"])
+    with col2:
+        perfil = st.selectbox("Seleccionar Perfil", st.session_state.config["perfiles"])
+    
+    if st.button("🏗️ Construir Matriz de Puesto con IA"):
+        with st.spinner("Consultando estándares de la industria minera..."):
+            prompt = f"""Eres el Gerente de Operaciones de Deyfor. 
+            Define el perfil ideal de competencias duras y blandas para el puesto de '{perfil}' dentro del macroproceso de '{macro}'.
+            Enfócate en requisitos de seguridad (SSOMA), eficiencia y normativas aplicables."""
+            
+            resultado = llamar_ia(prompt)
+            st.markdown(resultado)
 
 # --- MÓDULO 4: CALCULADORA ROI ---
 elif menu == "💰 Calculadora ROI":
@@ -256,7 +277,6 @@ elif menu == "📜 Historial":
         st.info("No hay registros guardados aún.")
     else:
         df_hist = pd.DataFrame(st.session_state.historial)
-        # Mostrar tabla resumen
         st.dataframe(df_hist[["fecha", "tipo", "sujeto", "perfil"]], use_container_width=True)
         
         st.markdown("---")
