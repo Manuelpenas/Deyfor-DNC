@@ -74,8 +74,8 @@ PROVEEDORES = {
     "Groq": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
     "OpenAI (ChatGPT)": ["gpt-4o", "gpt-4o-mini"],
     "Gemini (Google)": ["gemini-1.5-flash", "gemini-1.5-pro"],
-    "OpenRouter": ["meta-llama/llama-3.3-70b-instruct", "google/gemini-2.0-flash-001"],
-    "NVIDIA": ["meta/llama-3.1-405b-instruct", "nvidia/llama-3.1-nemotron-70b-instruct"]
+    "OpenRouter": ["meta-llama/llama-3.3-70b-instruct"],
+    "NVIDIA": ["meta/llama-3.1-405b-instruct"]
 }
 
 def llamar_ia(prompt):
@@ -102,14 +102,13 @@ def llamar_ia(prompt):
 with st.sidebar:
     if st.session_state.config.get("logo_base64"):
         st.markdown(f'<img src="data:image/png;base64,{st.session_state.config["logo_base64"]}" width="100%">', unsafe_allow_html=True)
-    # Se establece Análisis Individual como la primera opción
     menu = st.radio("GESTIÓN DEYFOR", ["👤 Análisis Individual", "📦 Perfiles y Cursos", "📈 ROI Potente", "📋 Módulo PDP", "📜 Historial", "⚙️ Configuración"])
 
-# --- MODULO 1: ANÁLISIS INDIVIDUAL (HOME) ---
+# --- MODULO 1: ANÁLISIS INDIVIDUAL ---
 if menu == "👤 Análisis Individual":
-    st.header("👤 Análisis Individual y Desarrollo")
+    st.header("👤 Desarrollo de Talento DEYFOR")
     data = st.session_state.config.get("colaboradores_data", [])
-    if not data: st.warning("Por favor, cargue los datos en la sección de Configuración.")
+    if not data: st.warning("Cargue los datos en Configuración.")
     else:
         df = pd.DataFrame(data)
         colab = st.selectbox("Seleccionar Colaborador", ["--"] + df['Nombre'].tolist())
@@ -118,7 +117,7 @@ if menu == "👤 Análisis Individual":
             perfil = str(info['PP']).strip()
             cursos = st.session_state.config.get("matriz_cursos", {}).get(perfil, [])
             
-            st.info(f"📍 Perfil: {perfil} | CC: {info['CC']} | MP: {info['MP']}")
+            st.info(f"👤 **Colaborador:** {colab} | **CC:** {info['CC']} | **MP:** {info['MP']}")
             
             if not cursos: st.error("No hay cursos configurados.")
             else:
@@ -129,73 +128,56 @@ if menu == "👤 Análisis Individual":
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
-                    if st.button("🚀 GENERAR REPORTE DE BRECHAS"):
+                    if st.button("🚀 GENERAR ANÁLISIS DE IMPACTO"):
                         aprobados = [k for k, v in check_c.items() if v]
-                        pendientes = [k for k, v in check_c.items() if not v]
-                        avance = round((len(aprobados)/len(cursos))*100, 2) if cursos else 0
-                        prompt = f"Consultor DEYFOR. Colaborador: {colab}. Perfil: {perfil}. CC: {info['CC']}. MP: {info['MP']}. Avance: {avance}%. Cursos faltantes: {pendientes}. Análisis ejecutivo."
-                        with st.spinner("Analizando..."):
-                            res = llamar_ia(prompt)
-                            st.markdown(f'<div class="report-box">### {colab} - {avance}% Avance\n\n{res}</div>', unsafe_allow_html=True)
-                            st.session_state.historial.append({"fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "sujeto": colab, "resultado": res})
-                            guardar_datos('historial.json', st.session_state.historial)
+                        avance = round((len(aprobados)/len(cursos))*100, 2)
+                        prompt = f"Analiza brechas para DEYFOR. Persona: {colab}. Avance: {avance}%. Cursos faltantes: {[k for k,v in check_c.items() if not v]}. Sé ejecutivo."
+                        res = llamar_ia(prompt)
+                        st.markdown(f'<div class="report-box">### {colab} - {avance}% Avance\n\n{res}</div>', unsafe_allow_html=True)
 
                 with col_btn2:
-                    if st.button("📄 GENERAR PDP (PLAN DE DESARROLLO)"):
+                    if st.button("📄 GENERAR PDP CORPORATIVO"):
                         pendientes = [k for k, v in check_c.items() if not v]
-                        prompt_pdp = f"""Actúa como el Jefe de Manuel Wilfredo Penas Culqui en DEYFOR. Genera un PDP basado en el modelo ABInBev.
-                        DATOS DEL EMPLEADO:
-                        Nombre: {colab}
-                        Posición: {perfil}
-                        Macroproceso: {info['MP']}
+                        prompt_pdp = f"""Genera un Plan de Desarrollo Personal (PDP) para DEYFOR con alta rigurosidad técnica.
                         
-                        ESTRUCTURA REQUERIDA (Al estilo ABInBev):
-                        1. OBJETIVOS DE LIDERAZGO (Definir 3: Soñar en Grande, Desarrollar personas, Lograr Sostenibilidad).
-                        2. OBJETIVOS TÉCNICOS: Basados en completar {pendientes}.
-                        3. PLAN DE ACCIÓN: Detallar experiencias en el puesto y entrenamiento formal.
-                        4. HERRAMIENTAS DIGITALES: Mencionar uso de Power BI, Dashboards o Chatbots para mejora de indicadores OTIF/NPS.
+                        DATOS BASE:
+                        - Nombre: {colab}
+                        - Centro de Costo (CC): {info['CC']}
+                        - Macroproceso (MP): {info['MP']}
+                        - Puesto: {perfil}
                         
-                        Relaciona todo directamente a las operaciones de DEYFOR."""
+                        REQUISITOS DEL PDP:
+                        1. OBJETIVOS Y COMPETENCIAS: Identifica 3 competencias clave a perfeccionar basadas en los cursos pendientes ({pendientes}) y el perfil de puesto.
+                        2. MÉTRICAS INNOVADORAS: Calcula e inventa métricas de impacto específicas para DEYFOR (ej. % Reducción de incidentes en {info['MP']}, Eficiencia de tiempo por automatización, etc.). No uses OTIF/NPS.
+                        3. CRONOGRAMA DE FORMACIÓN (DIAGRAMA GANTT): Crea una tabla o lista visual tipo Gantt que incluya Actividad, Fecha Inicio Propuesta y Fecha Fin Propuesta para cubrir las brechas.
                         
-                        with st.spinner("Creando Plan de Desarrollo..."):
-                            pdp_text = llamar_ia(prompt_pdp)
-                            st.markdown(f'<div class="report-box">### PLAN DE DESARROLLO PERSONAL - {colab}\n\n{pdp_text}</div>', unsafe_allow_html=True)
-                            # Guardar en el nuevo módulo PDP
-                            st.session_state.pdp_history.append({
-                                "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                                "empleado": colab,
-                                "pdp": pdp_text
-                            })
-                            guardar_datos('pdp_history.json', st.session_state.pdp_history)
+                        Estilo: Corporativo, motivador y directo."""
+                        
+                        pdp_text = llamar_ia(prompt_pdp)
+                        st.markdown(f'<div class="report-box">### PDP DEYFOR - {colab}\n\n{pdp_text}</div>', unsafe_allow_html=True)
+                        st.session_state.pdp_history.append({"fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "empleado": colab, "pdp": pdp_text})
+                        guardar_datos('pdp_history.json', st.session_state.pdp_history)
 
-# --- MODULO PDP GUARDADOS ---
+# --- MÓDULOS RESTANTES ---
 elif menu == "📋 Módulo PDP":
-    st.header("📋 Planes de Desarrollo Personal Guardados")
-    if not st.session_state.pdp_history:
-        st.info("No se han generado planes de desarrollo aún.")
+    st.header("📋 Archivo de Planes PDP")
+    if not st.session_state.pdp_history: st.info("No hay planes generados.")
     else:
         for p in reversed(st.session_state.pdp_history):
             with st.expander(f"{p['fecha']} - {p['empleado']}"):
                 st.markdown(p['pdp'])
-                st.download_button("📥 Descargar Plan (TXT)", p['pdp'], file_name=f"PDP_{p['empleado']}_{p['fecha']}.txt")
+                st.download_button("📥 Descargar Plan", p['pdp'], file_name=f"PDP_{p['empleado']}.txt", key=p['fecha'])
 
-# --- CONFIGURACIÓN CON CONTRASEÑA ---
 elif menu == "⚙️ Configuración":
-    st.header("⚙️ Configuración del Sistema")
+    st.header("⚙️ Configuración")
     if not st.session_state.autenticado:
-        pwd = st.text_input("Ingrese Contraseña de Administrador", type="password")
+        pwd = st.text_input("Contraseña", type="password")
         if st.button("Acceder"):
             if pwd == "D3yf0rE1RL":
                 st.session_state.autenticado = True
                 st.rerun()
-            else:
-                st.error("Contraseña Incorrecta")
+            else: st.error("Denegado")
     else:
-        if st.button("🔒 Cerrar Sesión"):
-            st.session_state.autenticado = False
-            st.rerun()
-            
-        st.subheader("Identidad Visual")
         cv1, cv2 = st.columns(2)
         with cv1:
             f_logo = st.file_uploader("Subir Logo", type=["png", "jpg"])
@@ -204,48 +186,43 @@ elif menu == "⚙️ Configuración":
             f_fav = st.file_uploader("Subir Favicon", type=["ico", "png"])
             if f_fav: st.session_state.config["favicon_base64"] = base64.b64encode(f_fav.read()).decode()
 
-        st.markdown("---")
-        st.subheader("Conexión de IA")
         c1, c2, c3 = st.columns(3)
-        with c1: st.session_state.config["api_proveedor"] = st.selectbox("IA Engine", list(PROVEEDORES.keys()))
-        with c2: st.session_state.config["api_key"] = st.text_input("API Key", value=st.session_state.config["api_key"], type="password")
+        with c1: st.session_state.config["api_proveedor"] = st.selectbox("IA", list(PROVEEDORES.keys()))
+        with c2: st.session_state.config["api_key"] = st.text_input("Key", value=st.session_state.config["api_key"], type="password")
         with c3: st.session_state.config["api_modelo"] = st.selectbox("Modelo", PROVEEDORES.get(st.session_state.config["api_proveedor"], ["Cargando..."]))
 
-        st.markdown("---")
-        st.subheader("Matrices de Datos")
         col1, col2, col3 = st.columns(3)
-        with col1: f_col = st.file_uploader("Cargar Colaboradores", type=["xlsx"])
-        with col2: f_mp = st.file_uploader("Cargar Macroprocesos", type=["xlsx"])
-        with col3: f_pp = st.file_uploader("Cargar Perfiles Base", type=["xlsx"])
+        with col1: f_col = st.file_uploader("1. Colaboradores", type=["xlsx"])
+        with col2: f_mp = st.file_uploader("2. Macroprocesos", type=["xlsx"])
+        with col3: f_pp = st.file_uploader("3. Perfiles", type=["xlsx"])
 
-        if st.button("💾 GUARDAR Y SINCRONIZAR"):
+        if st.button("💾 GUARDAR Y ACTUALIZAR"):
             if f_col: st.session_state.config["colaboradores_data"] = pd.read_excel(f_col).to_dict('records')
             if f_mp:
-                df_mp = pd.read_excel(f_mp)
-                st.session_state.config["detalles_mp"] = pd.Series(df_mp.Detalle.values, index=df_mp.MP).to_dict()
+                df_m = pd.read_excel(f_mp)
+                if 'MP' in df_m.columns and 'Detalle' in df_m.columns:
+                    st.session_state.config["detalles_mp"] = pd.Series(df_m.Detalle.values, index=df_m.MP).to_dict()
             if f_pp:
-                df_pp = pd.read_excel(f_pp)
-                matriz = df_pp.groupby('PP')['Cursos_Requeridos'].apply(lambda x: [str(i).strip() for i in x if str(i).lower() != 'nan']).to_dict()
-                st.session_state.config["matriz_cursos"] = {str(k).strip(): v for k, v in matriz.items()}
-                st.session_state.config["perfiles"] = list(st.session_state.config["matriz_cursos"].keys())
+                df_p = pd.read_excel(f_pp)
+                if 'PP' in df_p.columns and 'Cursos_Requeridos' in df_p.columns:
+                    matriz = df_p.groupby('PP')['Cursos_Requeridos'].apply(lambda l: [str(i).strip() for i in l if str(i).lower() != 'nan']).to_dict()
+                    st.session_state.config["matriz_cursos"] = {str(k).strip(): v for k, v in matriz.items()}
+                    st.session_state.config["perfiles"] = list(st.session_state.config["matriz_cursos"].keys())
             guardar_datos('config.json', st.session_state.config)
-            st.success("✅ Datos sincronizados correctamente.")
+            st.success("✅ Sincronizado")
 
-# --- OTROS MÓDULOS ---
 elif menu == "📦 Perfiles y Cursos":
-    st.header("📦 Gestión de Perfiles")
+    st.header("📦 Perfiles")
     p_sel = st.selectbox("Perfil", ["--"] + st.session_state.config.get("perfiles", []))
     if p_sel != "--":
         for c in st.session_state.config["matriz_cursos"].get(p_sel, []): st.markdown(f"✅ {c}")
 
 elif menu == "📈 ROI Potente":
-    st.header("📈 Calculadora ROI")
+    st.header("📈 ROI")
     costo = st.number_input("Inversión S/.", 0.0)
-    if st.button("Calcular"):
-        st.write(llamar_ia(f"ROI DEYFOR para inversión de S/.{costo}."))
+    if st.button("Calcular"): st.write(llamar_ia(f"ROI DEYFOR inversión S/.{costo}"))
 
 elif menu == "📜 Historial":
-    st.header("📜 Historial de Reportes")
-    if st.session_state.historial:
-        for h in reversed(st.session_state.historial):
-            with st.expander(f"{h['fecha']} - {h['sujeto']}"): st.markdown(h['resultado'])
+    st.header("📜 Historial")
+    for h in reversed(st.session_state.historial):
+        with st.expander(f"{h['fecha']} - {h['sujeto']}"): st.markdown(h['resultado'])
