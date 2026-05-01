@@ -112,14 +112,12 @@ if menu == "👤 Análisis Individual":
             perfil = str(info['PP']).strip()
             cursos = st.session_state.config.get("matriz_cursos", {}).get(perfil, [])
             st.info(f"👤 **Colaborador:** {colab} | **CC:** {info['CC']} | **MP:** {info['MP']}")
-            if not cursos:
-                st.error("No hay cursos configurados.")
+            if not cursos: st.error("No hay cursos configurados.")
             else:
                 check_c = {}
                 c1, c2 = st.columns(2)
                 for i, c in enumerate(cursos):
                     with (c1 if i%2==0 else c2): check_c[c] = st.checkbox(c, key=f"ci_{i}")
-                
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
                     if st.button("🚀 GENERAR ANÁLISIS"):
@@ -131,7 +129,7 @@ if menu == "👤 Análisis Individual":
                 with col_btn2:
                     if st.button("📄 GENERAR PDP CORPORATIVO"):
                         pendientes = [k for k, v in check_c.items() if not v]
-                        prompt_pdp = f"Genera PDP DEYFOR para {colab}. CC: {info['CC']}. MP: {info['MP']}. Puesto: {perfil}. Competencias: {pendientes}. Incluye Gantt y métricas innovadoras."
+                        prompt_pdp = f"PDP DEYFOR para {colab}. CC: {info['CC']}. MP: {info['MP']}. Puesto: {perfil}. Competencias: {pendientes}. Gantt y métricas innovadoras."
                         pdp_text = llamar_ia(prompt_pdp)
                         st.markdown(f'<div class="report-box">### PDP DEYFOR - {colab}\n\n{pdp_text}</div>', unsafe_allow_html=True)
                         st.session_state.pdp_history.append({"fecha": datetime.now().strftime("%Y-%m-%d %H:%M"), "empleado": colab, "pdp": pdp_text})
@@ -157,14 +155,12 @@ elif menu == "📦 Perfiles y Cursos":
 elif menu == "📈 ROI Potente":
     st.header("📈 Calculadora de ROI")
     todos_los_cursos = sorted(list(set([c for lista in st.session_state.config.get("matriz_cursos", {}).values() for c in lista])))
-    
     c1, c2, c3 = st.columns(3)
     with c1: 
         nom_cap = st.selectbox("Seleccionar Capacitación", ["-- Personalizado --"] + todos_los_cursos)
         if nom_cap == "-- Personalizado --": nom_cap = st.text_input("Nombre Manual")
     with c2: costo_cap = st.number_input("Inversión Total (S/.)", min_value=0, step=1, format="%d")
     with c3: cant_part = st.number_input("Participantes", min_value=1, step=1, format="%d")
-    
     st.subheader("Beneficios Estimados (Enteros)")
     b1, b2 = st.columns(2)
     with b1:
@@ -173,13 +169,12 @@ elif menu == "📈 ROI Potente":
     with b2:
         r_err = st.number_input("Reducción Errores (S/.)", min_value=0, step=1, format="%d")
         p_mul = st.number_input("Prevención Multas (S/.)", min_value=0, step=1, format="%d")
-            
     if st.button("📊 CALCULAR ROI"):
         prompt = f"ROI DEYFOR. Cap: {nom_cap}. Inversión: {costo_cap}. Beneficios: Accidentes {a_acc}, Productividad {i_prod}, Errores {r_err}, Multas {p_mul}."
         res = llamar_ia(prompt)
         st.markdown(f'<div class="report-box">### ROI: {nom_cap}\n\n{res}</div>', unsafe_allow_html=True)
 
-# --- MODULOS ADICIONALES ---
+# --- MÓDULOS ADICIONALES ---
 elif menu == "📋 Módulo PDP":
     st.header("📋 Archivo de Planes PDP")
     for p in reversed(st.session_state.pdp_history):
@@ -190,6 +185,7 @@ elif menu == "📜 Historial":
     for h in reversed(st.session_state.historial):
         with st.expander(f"{h['fecha']} - {h['sujeto']}"): st.markdown(h['resultado'])
 
+# --- CONFIGURACIÓN ---
 elif menu == "⚙️ Configuración":
     st.header("⚙️ Configuración")
     if not st.session_state.autenticado:
@@ -198,15 +194,33 @@ elif menu == "⚙️ Configuración":
             if pwd == "D3yf0rE1RL": st.session_state.autenticado = True; st.rerun()
             else: st.error("Denegado")
     else:
-        # Aquí van tus cargadores de archivos y logos (se mantienen igual que antes)
         if st.button("🔒 Cerrar Sesión"): st.session_state.autenticado = False; st.rerun()
-        st.subheader("Matrices y Datos")
+        st.subheader("🖼️ Identidad Visual")
+        civ1, civ2 = st.columns(2)
+        with civ1:
+            f_logo = st.file_uploader("Subir Logo", type=["png", "jpg"])
+            if f_logo: st.session_state.config["logo_base64"] = base64.b64encode(f_logo.read()).decode()
+        with civ2:
+            f_fav = st.file_uploader("Subir Favicon", type=["ico", "png"])
+            if f_fav: st.session_state.config["favicon_base64"] = base64.b64encode(f_fav.read()).decode()
+        st.markdown("---")
+        st.subheader("🤖 Configuración de IA")
         c1, c2, c3 = st.columns(3)
-        with c1: f_col = st.file_uploader("Colaboradores", type=["xlsx"])
-        with c2: f_mp = st.file_uploader("Macroprocesos", type=["xlsx"])
-        with c3: f_pp = st.file_uploader("Perfiles", type=["xlsx"])
+        with c1: st.session_state.config["api_proveedor"] = st.selectbox("Proveedor", list(PROVEEDORES.keys()))
+        with c2: st.session_state.config["api_key"] = st.text_input("Key", value=st.session_state.config["api_key"], type="password")
+        with c3: st.session_state.config["api_modelo"] = st.selectbox("Modelo", PROVEEDORES.get(st.session_state.config["api_proveedor"], ["..."]))
+        st.markdown("---")
+        st.subheader("📥 Carga de Matrices")
+        col1, col2, col3 = st.columns(3)
+        with col1: f_col = st.file_uploader("Colaboradores", type=["xlsx"])
+        with col2: f_mp = st.file_uploader("Macroprocesos", type=["xlsx"])
+        with col3: f_pp = st.file_uploader("Perfiles", type=["xlsx"])
         if st.button("💾 GUARDAR"):
             if f_col: st.session_state.config["colaboradores_data"] = pd.read_excel(f_col).to_dict('records')
+            if f_mp:
+                df_m_raw = pd.read_excel(f_mp)
+                if 'MP' in df_m_raw.columns and 'Detalle' in df_m_raw.columns:
+                    st.session_state.config["detalles_mp"] = pd.Series(df_m_raw.Detalle.values, index=df_m_raw.MP).to_dict()
             if f_pp:
                 df_p = pd.read_excel(f_pp)
                 matriz = df_p.groupby('PP')['Cursos_Requeridos'].apply(lambda l: [str(i).strip() for i in l if str(i).lower() != 'nan']).to_dict()
